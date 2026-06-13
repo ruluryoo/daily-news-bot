@@ -13,9 +13,8 @@ def clean_html(text):
     return re.sub('<.+?>', '', text).replace('&quot;', '"').replace('&amp;', '&')
 
 def fetch_and_send_news():
-    # 어제 날짜 계산 (예: 4월 30일 실행 시 4월 29일 기사만 찾음)
+    # 어제 날짜 계산
     yesterday = datetime.now() - timedelta(days=1)
-    # 네이버 날짜 형식(Wed, 29 Apr 2026)과 비교하기 위한 필터
     date_filter = yesterday.strftime("%d %b %Y") 
     display_date = yesterday.strftime("%Y-%m-%d")
 
@@ -37,8 +36,27 @@ def fetch_and_send_news():
     # 🔍 어제 날짜 기사만 필터링
     yesterday_items = [item for item in items if date_filter in item['pubDate']]
 
-    if not yesterday_items:
-        # 🔔 뉴스가 없을 때 슬랙에 보낼 메시지 구성
+    # ❌ 제외하고 싶은 단어 리스트 (영어는 반드시 '소문자'로 적어주세요)
+    exclude_keywords = ['로아이시가', 'law.ai', 'return on ai', '투자수익률 중심 ai']
+
+    # 过滤 🔍 제외 단어 필터링 적용
+    filtered_items = []
+    for item in yesterday_items:
+        title = clean_html(item['title'])
+        description = clean_html(item['description'])
+        
+        # 대소문자 구분을 없애기 위해 제목과 본문을 소문자로 만듭니다.
+        combined_text_lower = (title + " " + description).lower()
+        
+        # 제외 단어가 하나라도 들어있는지 확인
+        has_exclude_keyword = any(keyword in combined_text_lower for keyword in exclude_keywords)
+        
+        # 제외 단어가 없을 때만 리스트에 추가
+        if not has_exclude_keyword:
+            filtered_items.append(item)
+
+    # 이제 필터링된 결과(filtered_items)로 슬랙 메시지를 보냅니다.
+    if not filtered_items:
         payload = {
             "text": f"📅 *{display_date}* 알림\n어제는 *'ROAI'* 관련 새로운 뉴스가 없습니다. ☕"
         }
@@ -47,7 +65,7 @@ def fetch_and_send_news():
         return
 
     attachments = []
-    for item in yesterday_items:
+    for item in filtered_items:
         attachments.append({
             "title": clean_html(item['title']),
             "title_link": item['link'],
@@ -56,7 +74,7 @@ def fetch_and_send_news():
         })
 
     payload = {
-        "text": f"📅 *{display_date}* 전일 뉴스 요약 (총 {len(yesterday_items)}건)",
+        "text": f"📅 *{display_date}* 전일 뉴스 요약 (총 {len(filtered_items)}건)",
         "attachments": attachments
     }
 
